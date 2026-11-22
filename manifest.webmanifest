@@ -1,0 +1,12 @@
+{
+  "name": "STILL — Procedural Sound Environment",
+  "short_name": "STILL",
+  "description": "A quiet, non-repeating ambient soundscape generator.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
