@@ -7,17 +7,19 @@
 <section class="panel"><div class="head"><span class="label">Scale mode</span></div><select id="scaleMode"><option value="full">Full scale · 7 notes</option><option value="penta">Pentatonic · 5 notes</option></select></section>
 <section class="panel"><div class="head"><span class="label">Global density</span><span id="densityVal" class="value">12%</span></div><input id="density" type="range" min="0" max="100" value="12"><div class="scale"><span>ALMOST SILENT</span><span>SPARSE</span><span>ACTIVE</span></div></section>
 <section class="panel"><div class="head"><span class="label">Presets</span><span id="presetName" class="value">Custom</span></div><div class="presetRow"><button class="smallbtn" data-preset="allnoise">ALL NOISE</button><button class="smallbtn" data-preset="nonoise">NO NOISE</button><button class="smallbtn" data-preset="sleep">SLEEP</button><button class="smallbtn" data-preset="custom">CUSTOM</button></div></section>
-<section class="panel"><div class="head"><span class="label">Instrument voice</span><span class="value">ONE AT A TIME</span></div><select id="instrument"><option value="piano">Piano</option><option value="violin">Violin</option><option value="harp">Harp</option><option value="steel">Steel-string guitar</option></select></section><section class="panel"><div class="head"><span class="label">Chord layer</span><span id="chordV" class="value">55%</span></div><input id="chordLevel" type="range" min="0" max="100" value="55"><div class="scale"><span>MELODY ONLY</span><span>CHORDS + MELODY</span></div></section>
+<section class="panel"><div class="head"><span class="label">Instrument voice</span><span class="value">ONE AT A TIME</span></div><select id="instrument"><option value="piano">Piano</option><option value="violin">Violin</option><option value="harp">Harp</option><option value="steel">Steel-string guitar</option></select></section><section class="panel"><div class="head"><span class="label">Chord layer</span><span id="chordV" class="value">55%</span></div><input id="chordLevel" type="range" min="0" max="100" value="55"><div class="scale"><span>CHORDS ONLY</span><span>CHORDS + MELODY</span></div></section>
 <section class="panel noisePanel"><div class="head"><span class="label">Pink noise</span><span id="noiseV" class="value">6%</span></div><input id="noise" type="range" min="0" max="100" value="6"><div class="scale"><span>OFF</span><span>SUBTLE</span><span>SOFT BED</span></div></section><section class="panel master"><span class="label">Master</span><input id="master" type="range" min="0" max="100" value="35"><span id="masterV" class="value">35%</span></section>
-<div class="buttons"><button id="play" class="btn">▶ BEGIN SOUNDSCAPE</button><button id="reset" class="btn secondary">RESET</button></div><div id="msg" class="msg">Beta 0.7 · evolving harmony and phrase-aware melody</div><div class="installTip" id="installTip">For installation: open Chrome menu → Add to Home screen / Install app.</div><div class="foot">GENERATIVE · NON-REPEATING · NO BEAT</div></main>
+<div class="buttons"><button id="play" class="btn">▶ BEGIN SOUNDSCAPE</button><button id="reset" class="btn secondary">RESET</button></div><div id="msg" class="msg">Beta 0.7 · musical phrasing and warm reverb</div><div class="installTip" id="installTip">For installation: open Chrome menu → Add to Home screen / Install app.</div><div class="foot">GENERATIVE · NON-REPEATING · NO BEAT</div></main>
 <script>
 (()=>{
 const $=id=>document.getElementById(id);
-let ctx=null,masterNode=null,noiseSrc=null,noiseGain=null,running=false,timers={},activePreset='custom';
+let ctx=null,masterNode=null,reverbNode=null,reverbWet=null,noiseSrc=null,noiseGain=null,running=false,timers={},activePreset='custom';
 const ids=['gravity','scaleMode','density','instrument','chordLevel','noise','master'];
 const hz=n=>440*Math.pow(2,(n-69)/12),val=id=>+$(id).value,mix=id=>val(id)/100;
 const SCALE=[0,2,4,5,7,9,11],PENTA=[0,2,4,7,9];
 let progression=[],progressionIndex=0,currentDegree=0,currentChordMidi=[],previousChordMidi=[],phrase={direction:1,left:0,contour:0},lastMelodyDegree=null,lastWasNonChord=false,lastPitch=null,melodyCount=0;
+function createReverb(){const seconds=4.2,decay=2.8,len=Math.floor(ctx.sampleRate*seconds),imp=ctx.createBuffer(2,len,ctx.sampleRate);for(let ch=0;ch<2;ch++){const d=imp.getChannelData(ch);for(let i=0;i<len;i++){const fade=Math.pow(1-i/len,decay);d[i]=(Math.random()*2-1)*fade;}}reverbNode=ctx.createConvolver();reverbNode.buffer=imp;reverbWet=ctx.createGain();reverbWet.gain.value=.24;reverbNode.connect(reverbWet);reverbWet.connect(masterNode);}
+function routeWithReverb(node){node.connect(masterNode);if(reverbNode)node.connect(reverbNode);}
 function status(s,c='#d7b77f'){$('status').textContent='● '+s;$('status').style.color=c}
 function minorMode(){return val('gravity')>=55}
 function scale(){return $('scaleMode').value==='penta'?PENTA:SCALE}
@@ -53,36 +55,48 @@ function chooseChord(){
  return chord;
 }
 function envelope(g,t,attack,hold,release,peak){g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(Math.max(.0002,peak),t+attack);g.gain.setValueAtTime(Math.max(.0002,peak),t+attack+hold);g.gain.setTargetAtTime(.0001,t+attack+hold,Math.max(.15,release/4));}
-function melodyTone(kind,n,t,duration,level=1){const f=hz(n),out=ctx.createGain();out.connect(masterNode);const peak=level*.12;if(!peak)return;
+function melodyTone(kind,n,t,duration,level=1){const f=hz(n),out=ctx.createGain();routeWithReverb(out);const peak=level*.12*mix('chordLevel');if(!peak)return;
  if(kind==='violin'){const o=ctx.createOscillator(),filter=ctx.createBiquadFilter(),v=ctx.createOscillator(),vg=ctx.createGain();filter.type='lowpass';filter.frequency.value=2100;o.type='sawtooth';o.frequency.value=f;v.frequency.value=4.7;vg.gain.value=2.2;v.connect(vg);vg.connect(o.frequency);o.connect(filter);filter.connect(out);envelope(out,t,.35,Math.max(.1,duration-.8),.5,peak*.68);o.start(t);v.start(t);o.stop(t+duration+1);v.stop(t+duration+1);
  }else{const partials=kind==='piano'?[[1,1],[2,.34],[3,.13],[4,.055],[5,.02]]:kind==='harp'?[[1,1],[2,.28],[3,.11],[4,.04]]:[[1,1],[2,.3],[3,.1],[4,.035]];partials.forEach(([r,a])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type=kind==='steel'?'sine':'triangle';o.frequency.value=f*r;g.gain.value=a;o.connect(g);g.connect(out);o.start(t);o.stop(t+duration+.2)});envelope(out,t,kind==='piano'?.012:.025,Math.max(.05,duration-.15),kind==='piano'?.45:.28,peak);}
 }
-function chordPad(notes,t,hold){notes.forEach((n,i)=>{const out=ctx.createGain(),filter=ctx.createBiquadFilter();out.connect(masterNode);filter.type='lowpass';filter.frequency.value=850;const o=ctx.createOscillator(),o2=ctx.createOscillator();o.type='triangle';o2.type='sine';o.frequency.value=hz(n);o2.frequency.value=hz(n)*1.003;o.connect(filter);o2.connect(filter);filter.connect(out);const level=mix('chordLevel')*.065;envelope(out,t,4,Math.max(1,hold-4),5,level);o.start(t);o2.start(t);o.stop(t+hold+10);o2.stop(t+hold+10);});}
+function chordPad(notes,t,hold){notes.forEach((n,i)=>{const out=ctx.createGain(),filter=ctx.createBiquadFilter();routeWithReverb(out);filter.type='lowpass';filter.frequency.value=850;const o=ctx.createOscillator(),o2=ctx.createOscillator();o.type='triangle';o2.type='sine';o.frequency.value=hz(n);o2.frequency.value=hz(n)*1.003;o.connect(filter);o2.connect(filter);filter.connect(out);const level=.145;envelope(out,t,3.2,Math.max(1,hold-5),3.5,level);o.start(t);o2.start(t);o.stop(t+hold+10);o2.stop(t+hold+10);});}
 function playNewChord(){const now=ctx.currentTime+.05,notes=chooseChord(),hold=21+Math.random()*7;chordPad(notes,now,hold);return hold}
 function chooseMelodyNote(){
- const pool=scale(),degreeCount=pool.length;let base=lastMelodyDegree===null?Math.floor(degreeCount/2):lastMelodyDegree;
- if(phrase.left<=0){phrase.left=3+Math.floor(Math.random()*4);phrase.direction=weighted([{v:-1,w:1},{v:1,w:1},{v:0,w:1}]);phrase.contour=0;}
- let next;if(phrase.direction===0)next=base+(Math.random()<.5?-1:1);else next=base+phrase.direction*(Math.random()<.18?2:1);
- if(next<0||next>=degreeCount){phrase.direction*=-1;next=Math.max(0,Math.min(degreeCount-1,base+phrase.direction));}
- if(Math.random()<.16){phrase.direction*=-1;}
- phrase.left--;phrase.contour+=next-base;
- const chordClasses=currentChordMidi.map(n=>((n%12)+12)%12),isChord=chordClasses.includes(pool[next]%12);
- let chosen=next;
- // Give chord tones a strong pull, especially at phrase endings.
- if(Math.random()<(phrase.left===0?.78:.43)){
-   const matches=pool.map((pc,i)=>({i,ok:chordClasses.includes(pc)})).filter(x=>x.ok);
-   if(matches.length){chosen=matches.reduce((a,b)=>Math.abs(b.i-base)<Math.abs(a.i-base)?b:a,matches[0]).i;}
+ const pool=scale(),count=pool.length;
+ // A compact one-octave register keeps the line intimate and avoids octave-doubled repeats.
+ const low=minorMode()?57:60,high=low+12;
+ if(phrase.left<=0){
+   phrase={direction:weighted([{v:-1,w:3},{v:1,w:3},{v:0,w:2}]),left:3+Math.floor(Math.random()*4),contour:0,holdNext:false};
+   phrase.holdNext=Math.random()<.72; // most phrases resolve into a longer resting note
  }
- let nonChord=!chordClasses.includes(pool[chosen]%12);
- if(lastWasNonChord&&nonChord){const safe=pool.map((pc,i)=>({i,ok:chordClasses.includes(pc)})).filter(x=>x.ok);if(safe.length){chosen=safe.reduce((a,b)=>Math.abs(b.i-base)<Math.abs(a.i-base)?b:a,safe[0]).i;nonChord=false;}}
- lastWasNonChord=nonChord;lastMelodyDegree=chosen;
- const tonic=minorMode()?57:60;let pitch=tonic+pool[chosen]+(chosen<2?12:12);if(lastPitch!==null){while(pitch-lastPitch>9)pitch-=12;while(lastPitch-pitch>9)pitch+=12;}pitch=Math.max(48,Math.min(88,pitch));lastPitch=pitch;return pitch;
+ let base=lastMelodyDegree===null?Math.floor((count-1)/2):lastMelodyDegree;
+ let step=Math.random()<.13?2:1; // mostly scalar motion; occasional small third
+ let next=base+(phrase.direction===0?(Math.random()<.5?-1:1):phrase.direction*step);
+ if(next<0||next>=count){phrase.direction*=-1;next=Math.max(0,Math.min(count-1,base+(phrase.direction||1)));}
+ if(Math.random()<.12)phrase.direction*=-1;
+ // Strongly favour current chord tones; phrase-ending notes are chord tones by design.
+ const chordClasses=currentChordMidi.map(n=>((n%12)+12)%12);
+ const candidates=pool.map((pc,i)=>({i,pc,isChord:chordClasses.includes(pc)}));
+ let chosen=candidates.find(x=>x.i===next)||candidates[base];
+ const chordOptions=candidates.filter(x=>x.isChord&&Math.abs(x.i-base)<=2);
+ const mustResolve=lastWasNonChord||phrase.left===1;
+ if(mustResolve||Math.random()<.76){
+   if(chordOptions.length)chosen=chordOptions.reduce((a,b)=>Math.abs(b.i-next)<Math.abs(a.i-next)?b:a,chordOptions[0]);
+   else if(mustResolve){const all=candidates.filter(x=>x.isChord);if(all.length)chosen=all.reduce((a,b)=>Math.abs(b.i-base)<Math.abs(a.i-base)?b:a,all[0]);}
+ }
+ let nonChord=!chosen.isChord;
+ if(lastWasNonChord&&nonChord){const safe=candidates.filter(x=>x.isChord);if(safe.length){chosen=safe.reduce((a,b)=>Math.abs(b.i-base)<Math.abs(a.i-base)?b:a,safe[0]);nonChord=false;}}
+ lastWasNonChord=nonChord;lastMelodyDegree=chosen.i;phrase.left--;phrase.contour+=chosen.i-base;
+ let pitch=low+chosen.pc;
+ // Keep the melody strictly within one octave, without octave-jumping to chase a pitch.
+ pitch=Math.max(low,Math.min(high,pitch));
+ return {pitch,hold:phrase.left===0};
 }
-function densityProfile(){const d=mix('density');return {skip:.60*Math.pow(1-d,1.15),interval:8.5-6.1*d,duration:8.5-5.2*d};}
-function scheduleMelody(){if(!running)return;const p=densityProfile(),jitter=.78+Math.random()*.44;timers.melody=setTimeout(()=>{if(!running)return;const kind=$('instrument').value;if(Math.random()>=p.skip){const pitch=chooseMelodyNote(),dur=p.duration*(.82+Math.random()*.36);melodyTone(kind,pitch,ctx.currentTime+.03,dur,.9);melodyCount++;}scheduleMelody();},p.interval*jitter*1000);}
+function densityProfile(){const d=mix('density');return {skip:.48*Math.pow(1-d,1.05),interval:7.2-4.9*d,short:2.0-0.65*d,long:5.2-1.6*d};}
+function scheduleMelody(){if(!running)return;const p=densityProfile(),jitter=.88+Math.random()*.24;timers.melody=setTimeout(()=>{if(!running)return;const kind=$('instrument').value;if(Math.random()>=p.skip){const note=chooseMelodyNote();const dur=note.hold?p.long*(.85+Math.random()*.3):p.short*(.8+Math.random()*.35);melodyTone(kind,note.pitch,ctx.currentTime+.03,dur,.9);melodyCount++;}scheduleMelody();},p.interval*jitter*1000);}
 function scheduleChords(){if(!running)return;const wait=playNewChord();timers.chords=setTimeout(()=>{if(running)scheduleChords();},wait*1000);}
 function makeNoise(){const len=ctx.sampleRate*3,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;for(let i=0;i<len;i++){let w=Math.random()*2-1;b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;b2=.969*b2+w*.1538526;b3=.8665*b3+w*.3104856;b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;d[i]=(b0+b1+b2+b3+b4+b5+b6+w*.5362)*.08;b6=w*.115926;}noiseSrc=ctx.createBufferSource();noiseSrc.buffer=buf;noiseSrc.loop=true;const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=4500;noiseGain=ctx.createGain();noiseGain.gain.value=mix('noise')*.025;noiseSrc.connect(lp);lp.connect(noiseGain);noiseGain.connect(masterNode);noiseSrc.start();}
-async function start(){try{if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();await ctx.resume();if(!masterNode){masterNode=ctx.createGain();masterNode.gain.value=mix('master');masterNode.connect(ctx.destination);}if(running){stop();return;}running=true;progression=[];progressionIndex=0;currentDegree=minorMode()?5:0;currentChordMidi=[];previousChordMidi=[];lastMelodyDegree=null;lastWasNonChord=false;lastPitch=null;phrase={direction:1,left:0,contour:0};makeNoise();status('PLAYING','#d8bd82');$('play').textContent='Ⅱ PAUSE SOUNDSCAPE';$('msg').textContent='Beta 0.7 · evolving harmony and phrase-aware melody';scheduleChords();scheduleMelody();}catch(e){status('AUDIO ERROR','#e18d79');$('msg').textContent='Could not start audio: '+e.message;}}
+async function start(){try{if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();await ctx.resume();if(!masterNode){masterNode=ctx.createGain();masterNode.gain.value=mix('master');masterNode.connect(ctx.destination);createReverb();}if(running){stop();return;}running=true;progression=[];progressionIndex=0;currentDegree=minorMode()?5:0;currentChordMidi=[];previousChordMidi=[];lastMelodyDegree=null;lastWasNonChord=false;lastPitch=null;phrase={direction:1,left:0,contour:0};makeNoise();status('PLAYING','#d8bd82');$('play').textContent='Ⅱ PAUSE SOUNDSCAPE';$('msg').textContent='Beta 0.7 · musical phrasing and warm reverb';scheduleChords();scheduleMelody();}catch(e){status('AUDIO ERROR','#e18d79');$('msg').textContent='Could not start audio: '+e.message;}}
 function stop(){running=false;Object.values(timers).forEach(clearTimeout);timers={};if(noiseSrc){try{noiseSrc.stop();}catch{}noiseSrc=null;}noiseGain=null;if(ctx&&ctx.state==='running')ctx.suspend();status('PAUSED','#b8a89a');$('play').textContent='▶ RESUME SOUNDSCAPE';$('msg').textContent='Paused';}
 function snapshot(){const s={};ids.forEach(k=>s[k]=$(k).value);return s;}function save(){try{localStorage.setItem('still-settings',JSON.stringify(snapshot()));localStorage.setItem('still-preset',activePreset);}catch{}}
 function restore(){try{const s=JSON.parse(localStorage.getItem('still-settings')||'null');if(s)ids.forEach(k=>{if(s[k]!==undefined)$(k).value=s[k];});activePreset=localStorage.getItem('still-preset')||'custom';}catch{}}
