@@ -1,15 +1,15 @@
-# STILL Beta 0.7a — musical refinement
+# STILL Beta 0.7b
 
-Upload the contents of this folder into the root of the GitHub Pages repository, replacing the existing files. Keep backups of earlier versions.
+Upload the contents of this folder into the root of the GitHub Pages repository, replacing the existing files.
 
-## Changes in this refinement
-- Chord layer level increased substantially.
-- Chord blend slider now runs from CHORDS ONLY to CHORDS + MELODY; melody fades in as the slider rises.
-- Melody register constrained to one octave to avoid octave-doubled repetitions.
-- Melody moves predominantly by scale steps, with occasional small thirds.
-- Chord tones are strongly favoured, with phrase endings resolving to chord tones and the consecutive non-chord-tone rule retained.
-- Phrases now alternate short scalar movement with a longer held note.
-- Added a shared synthetic reverb send so note tails can overlap acoustically without requiring very long sustained notes.
-- Service worker cache updated to still-beta-07a.
+## Beta 0.7b musical engine refinements
+- Triad chord tones are strongly favoured and receive longer note durations.
+- Chord extensions receive medium durations; passing notes are shorter.
+- Longer chord-tone notes remain common at maximum density.
+- Maximum density increases activity without turning the melody into a stream of short notes.
+- At each chord change, an existing melody line resolves to the nearest available triad tone in its one-octave register.
+- Phrase endings favour sustained triad tones.
+- Existing controls, presets, instrument choices, reverb and PWA structure are retained.
 
-This remains a Web Audio synth prototype; please listen-test the balance and reverb on the target phone.
+## Notes
+This remains a synthesized native Web Audio prototype. It does not yet use SoundFont samples. Audio needs listening tests on a real device.
